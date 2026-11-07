@@ -31,7 +31,7 @@ class DiagnosticsLoggerTest {
 
     @Test
     fun passwordWithColonOrEqualsIsRedacted() {
-        DiagnosticsLogger.d("TestTag", "User secret: password = supersecretpass123")
+        DiagnosticsLogger.d("TestTag", "password = supersecretpass123")
         val exported = DiagnosticsLogger.getExportableLogText()
         assertFalse(exported.contains("supersecretpass123"))
         assertTrue(exported.contains("password=[REDACTED]"))

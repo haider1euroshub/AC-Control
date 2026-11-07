@@ -78,12 +78,10 @@ object DiagnosticsLogger : DiagnosticsSink {
 
     fun redactSecrets(input: String): String {
         var result = input
-        // 1. Redact assignment/json secrets completely in a loop until no more matches
-        while (passwordPattern.containsMatchIn(result)) {
-            result = passwordPattern.replace(result) { match ->
-                val keyWord = match.groupValues[1]
-                "$keyWord=[REDACTED]"
-            }
+        // 1. Redact assignment/json secrets completely
+        result = passwordPattern.replace(result) { match ->
+            val keyWord = match.groupValues[1]
+            "$keyWord=[REDACTED]"
         }
         // 2. Redact standalone 32 or 64 char hex keys completely (no partial reveal)
         result = hexKeyPattern.replace(result) {
