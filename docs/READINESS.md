@@ -40,3 +40,4 @@ This document tracks the completion of software readiness criteria and identifie
 | **Temperature Increment / Decrement** | ⏳ PENDING (Awaiting AC on local Wi-Fi) |
 | **Louver Fan Swing Movement** | ⏳ PENDING (Awaiting AC on local Wi-Fi) |
 | **Wireshark Packet Trace Validation** | ⏳ PENDING (Awaiting AC on local Wi-Fi) |
+

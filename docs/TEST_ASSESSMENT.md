@@ -69,3 +69,4 @@
   4. `ringBufferRetainsMaximumEntries`: Proves the 200-entry eviction ring buffer prevents memory leaks.
   5. `allDomainErrorsMapToNonEmptyUserMessages`: Proves every `AcError` sealed subclass maps to an informative user-facing string.
   6. `permissionMissingSuggestsSettings`: Checks permission error UX guidance.
+

@@ -156,3 +156,4 @@ This document provides a trace of all critical control and data execution paths 
         └─► Emits DiagnosticsSink.logError("Checksum mismatch")
         └─► Packet discarded; state is NOT modified with corrupt data
 ```
+
