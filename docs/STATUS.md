@@ -44,3 +44,4 @@
 
 - **Debug APK:** `app/build/outputs/apk/debug/app-debug.apk` (19,225,201 bytes)
 - **Release APK:** `app/build/outputs/apk/release/app-release-unsigned.apk` (1,349,156 bytes, R8 minified, unsigned)
+

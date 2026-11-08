@@ -48,3 +48,4 @@
   - 32-character and 64-character hex strings (potential local keys or tokens) are masked as `[REDACTED_32_HEX]` / `[REDACTED_64_HEX]`.
   - Passwords, access tokens, and MAC addresses matching sensitive patterns are stripped before export.
   - Zero partial reveal: keys are not partially displayed (e.g. `1234****abcd` is prohibited).
+
