@@ -73,6 +73,28 @@ class AcControllerTest {
         assertEquals(22.0, AcController.clampTemperature(22.3, caps), 0.01)
     }
 
+    @Test
+    fun staleProvenanceIsNotKnownForControlBasisButHasDisplayValue() {
+        val stalePower = ValueWithProvenance.stale(PowerState.ON)
+        assertFalse("Stale value must NOT be known for control basis", stalePower.isKnown)
+        assertTrue("Stale value should still have display value", stalePower.hasDisplayValue)
+        assertEquals(StateProvenance.STALE, stalePower.provenance)
+        assertEquals(PowerState.ON, stalePower.value)
+    }
+
+    @Test
+    fun steppingWithUnknownTargetTemperatureSetsDisabledReason() = testScope.runTest {
+        val state = AcState(
+            power = ValueWithProvenance.confirmed(PowerState.ON),
+            targetTemperature = ValueWithProvenance.unknown()
+        )
+        val caps = AcCapabilities(areCapabilitiesKnown = true)
+
+        controller.onTemperatureStep(true, state, caps)
+        assertNotNull(controller.disabledReason.value)
+        assertEquals(0, fakeRepository.setTargetTemperatureCallCount)
+    }
+
     private class MockAcRepository : AcRepository {
         var setTargetTemperatureCallCount = 0
         var lastSentTargetTemperature = 0.0

@@ -96,24 +96,46 @@ class SmartAir2Driver(
             )
         }
 
+        // SAFETY: Never fabricate defaults for unknown fields.
+        // Block the command if any required passthrough field is unknown.
         val targetMode = when (command) {
             is AcCommand.SetMode -> command.mode
-            else -> cur.mode.value ?: AcMode.COOL
+            else -> cur.mode.value ?: return CommandResult.Failed(
+                AcError.CommandBlocked(
+                    "AC mode is unknown; cannot safely assemble control frame. " +
+                    "Refresh status or assert baseline in Setup."
+                )
+            )
         }
 
         val targetTemp = when (command) {
             is AcCommand.SetTargetTemperature -> command.target
-            else -> cur.targetTemperature.value ?: 24.0
+            else -> cur.targetTemperature.value ?: return CommandResult.Failed(
+                AcError.CommandBlocked(
+                    "Target temperature is unknown; cannot safely assemble control frame. " +
+                    "Refresh status or assert baseline in Setup."
+                )
+            )
         }
 
         val targetVert = when (command) {
             is AcCommand.SetVerticalSwing -> command.position
-            else -> cur.swing.value?.vertical ?: SwingPosition.OFF
+            else -> cur.swing.value?.vertical ?: return CommandResult.Failed(
+                AcError.CommandBlocked(
+                    "Vertical swing state is unknown; cannot safely assemble control frame. " +
+                    "Refresh status or assert baseline in Setup."
+                )
+            )
         }
 
         val targetHoriz = when (command) {
             is AcCommand.SetHorizontalSwing -> command.position
-            else -> cur.swing.value?.horizontal ?: SwingPosition.OFF
+            else -> cur.swing.value?.horizontal ?: return CommandResult.Failed(
+                AcError.CommandBlocked(
+                    "Horizontal swing state is unknown; cannot safely assemble control frame. " +
+                    "Refresh status or assert baseline in Setup."
+                )
+            )
         }
 
         val packet = SmartAir2Layout.buildControlPacket(

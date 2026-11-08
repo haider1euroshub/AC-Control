@@ -71,4 +71,14 @@ class SmartAir2DriverTest : DriverContractTest() {
         val parsed = SmartAir2Layout.parseStatusPacket(raw)
         assertNull(parsed)
     }
+
+    @Test
+    fun executeCommandWithoutKnownStateBlocksWithTypedError() = runBlocking {
+        val driver = SmartAir2Driver()
+        // Initial state has unknown power, mode, etc.
+        val result = driver.executeCommand(AcCommand.SetTargetTemperature(25.0))
+        assertTrue("Command must fail when required state is unknown", result is CommandResult.Failed)
+        val err = (result as CommandResult.Failed).error
+        assertTrue("Error should be CommandBlocked", err is AcError.CommandBlocked)
+    }
 }

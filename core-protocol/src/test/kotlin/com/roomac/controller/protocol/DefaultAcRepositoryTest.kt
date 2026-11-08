@@ -50,6 +50,24 @@ class DefaultAcRepositoryTest {
     }
 
     @Test
+    fun commandSafetyGateBlocksTemperatureWhenPowerIsStale() = runTest {
+        val config = DeviceConfig(protocolId = fakeDriver.id, host = "192.168.1.50")
+        repository.applyConfiguration(config)
+
+        // Power state is STALE (was previously confirmed but connection dropped)
+        fakeDriver.setTestState(AcState(
+            power = ValueWithProvenance.stale(PowerState.ON),
+            isReachable = false
+        ))
+
+        val result = repository.setTargetTemperature(26.0)
+        assertTrue("Safety gate must block temperature command when power state is stale", result is CommandResult.Failed)
+        val error = (result as CommandResult.Failed).error
+        assertTrue(error is AcError.CommandBlocked)
+        assertTrue((error as AcError.CommandBlocked).reason.contains("stale"))
+    }
+
+    @Test
     fun configuredDriverExecutesPowerSuccessfully() = runTest {
         val config = DeviceConfig(protocolId = fakeDriver.id, host = "192.168.1.50")
         repository.applyConfiguration(config)

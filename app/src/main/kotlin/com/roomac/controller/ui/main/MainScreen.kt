@@ -190,8 +190,9 @@ internal fun ActiveControlsView(
                 val tempText = if (tempVal != null) "${tempVal.toInt()}°C" else "--"
                 val provenanceText = when (uiState.acState.targetTemperature.provenance) {
                     StateProvenance.CONFIRMED_BY_AC -> "Confirmed by AC"
+                    StateProvenance.STALE -> "Stale (was confirmed; reconnect to refresh)"
                     StateProvenance.OPTIMISTIC_AFTER_SEND -> "Sent (Awaiting Confirmation)"
-                    StateProvenance.OWNER_ASSERTED -> "Owner Asserted"
+                    StateProvenance.OWNER_ASSERTED -> "Owner-entered, not verified"
                     StateProvenance.UNKNOWN -> "Unknown State"
                 }
 
@@ -221,19 +222,32 @@ internal fun ActiveControlsView(
         }
 
         // Power Toggle
+        // SAFETY (G1): Unknown power state must NEVER render as OFF.
+        // We use a tri-state: ON / OFF / UNKNOWN.
+        val powerKnown = uiState.acState.power.isKnown || uiState.acState.power.provenance == StateProvenance.STALE
         val isPowerOn = uiState.acState.power.value == PowerState.ON
+        val powerLabel = when {
+            !uiState.acState.power.hasDisplayValue -> "POWER (Unknown)"
+            uiState.acState.power.provenance == StateProvenance.STALE -> if (isPowerOn) "TURN OFF (Stale)" else "TURN ON (Stale)"
+            isPowerOn -> "TURN OFF"
+            else -> "TURN ON"
+        }
         Button(
             onClick = onPowerClicked,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (isPowerOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                containerColor = when {
+                    !uiState.acState.power.hasDisplayValue -> MaterialTheme.colorScheme.secondary
+                    isPowerOn -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.outline
+                }
             )
         ) {
             Icon(Icons.Default.PowerSettingsNew, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
-            Text(if (isPowerOn) "TURN OFF" else "TURN ON", fontWeight = FontWeight.Bold)
+            Text(powerLabel, fontWeight = FontWeight.Bold)
         }
 
         // Mode Chips
@@ -261,22 +275,35 @@ internal fun ActiveControlsView(
         }
 
         // Swing Controls
+        // SAFETY (G2): Unknown swing state must NEVER render as OFF.
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Vertical Fan Swing", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                val swingStale = uiState.acState.swing.provenance == StateProvenance.STALE
+                val swingLabel = if (swingStale) "Vertical Fan Swing (Stale)" else "Vertical Fan Swing"
+                Text(swingLabel, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
-                val curVert = uiState.acState.swing.value?.vertical ?: SwingPosition.OFF
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = curVert == SwingPosition.OFF,
-                        onClick = { onVerticalSwingSelected(SwingPosition.OFF) },
-                        label = { Text("Fixed") }
+                val swingValue = uiState.acState.swing.value
+                if (swingValue == null && uiState.acState.swing.provenance == StateProvenance.UNKNOWN) {
+                    // Unknown: show indicator, don't select any chip
+                    Text(
+                        "Swing state unknown — refresh status or set baseline",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    FilterChip(
-                        selected = curVert == SwingPosition.OSCILLATE,
-                        onClick = { onVerticalSwingSelected(SwingPosition.OSCILLATE) },
-                        label = { Text("Oscillate") }
-                    )
+                } else {
+                    val curVert = swingValue?.vertical
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = curVert == SwingPosition.OFF,
+                            onClick = { onVerticalSwingSelected(SwingPosition.OFF) },
+                            label = { Text("Fixed") }
+                        )
+                        FilterChip(
+                            selected = curVert == SwingPosition.OSCILLATE,
+                            onClick = { onVerticalSwingSelected(SwingPosition.OSCILLATE) },
+                            label = { Text("Oscillate") }
+                        )
+                    }
                 }
             }
         }

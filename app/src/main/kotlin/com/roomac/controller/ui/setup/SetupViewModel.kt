@@ -130,6 +130,14 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(hasOwnerBaseline = enabled) }
     }
 
+    fun onBaselinePowerSelected(power: PowerState) {
+        _uiState.update { it.copy(baselinePower = power) }
+    }
+
+    fun onBaselineModeSelected(mode: AcMode) {
+        _uiState.update { it.copy(baselineMode = mode) }
+    }
+
     fun probeConnection() {
         val s = _uiState.value
         val portInt = s.port.toIntOrNull() ?: 56800

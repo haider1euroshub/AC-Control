@@ -77,13 +77,16 @@ class DefaultAcRepository(
 
         // --- COMMAND SAFETY GATE (Phase 1) ---
         // If a control command must carry a full frame, verify that required fields are known or baseline asserted.
+        // STALE values (device-reported before disconnect) are NOT a valid control basis.
         if (command !is AcCommand.RefreshState && command !is AcCommand.SetPower) {
             val currentState = driver.stateFlow.value
-            val isPowerKnown = currentState.power.isKnown
+            val isPowerKnown = currentState.power.isKnown  // isKnown returns false for STALE
             if (!isPowerKnown) {
+                val staleSuffix = if (currentState.power.provenance == StateProvenance.STALE)
+                    " (Last known state is stale — reconnect to refresh.)" else ""
                 val err = AcError.CommandBlocked(
                     "AC power state is unknown. Cannot alter mode, temperature, or swing without knowing power state. " +
-                    "Refresh status or assert hardware bring-up baseline in Setup."
+                    "Refresh status or assert hardware bring-up baseline in Setup.$staleSuffix"
                 )
                 _lastError.value = err
                 _commandLifecycle.value = CommandLifecycle.Failed(command, err)

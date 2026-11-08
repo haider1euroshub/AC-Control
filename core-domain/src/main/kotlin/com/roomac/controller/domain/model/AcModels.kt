@@ -31,6 +31,7 @@ data class SwingState(
  */
 enum class StateProvenance {
     CONFIRMED_BY_AC,        // Verified directly from a valid parsed status packet from the AC
+    STALE,                  // Was CONFIRMED_BY_AC but connection lost; still displayed but not a control basis
     OPTIMISTIC_AFTER_SEND,  // In-flight command transmitted over network; awaiting confirmation
     OWNER_ASSERTED,         // Explicitly entered by the owner in Setup (Bring-up mode)
     UNKNOWN                 // No confirmed or asserted value exists
@@ -40,11 +41,23 @@ data class ValueWithProvenance<T>(
     val value: T?,
     val provenance: StateProvenance = StateProvenance.UNKNOWN
 ) {
-    val isKnown: Boolean get() = value != null && provenance != StateProvenance.UNKNOWN
+    /**
+     * Value is known and usable as a control basis.
+     * STALE values are displayed but NOT usable for sending control frames.
+     */
+    val isKnown: Boolean get() = value != null &&
+        provenance != StateProvenance.UNKNOWN &&
+        provenance != StateProvenance.STALE
+
+    /**
+     * True if the value can be displayed (even if stale/optimistic).
+     */
+    val hasDisplayValue: Boolean get() = value != null && provenance != StateProvenance.UNKNOWN
 
     companion object {
         fun <T> unknown(): ValueWithProvenance<T> = ValueWithProvenance(null, StateProvenance.UNKNOWN)
         fun <T> confirmed(value: T): ValueWithProvenance<T> = ValueWithProvenance(value, StateProvenance.CONFIRMED_BY_AC)
+        fun <T> stale(value: T): ValueWithProvenance<T> = ValueWithProvenance(value, StateProvenance.STALE)
         fun <T> optimistic(value: T): ValueWithProvenance<T> = ValueWithProvenance(value, StateProvenance.OPTIMISTIC_AFTER_SEND)
         fun <T> ownerAsserted(value: T): ValueWithProvenance<T> = ValueWithProvenance(value, StateProvenance.OWNER_ASSERTED)
     }

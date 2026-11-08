@@ -1,4 +1,4 @@
-﻿.gradle/
+.gradle/
 **/build/
 .idea/
 local.properties
@@ -7,3 +7,4 @@ local.properties
 .env
 
 .tools/
+.kotlin/

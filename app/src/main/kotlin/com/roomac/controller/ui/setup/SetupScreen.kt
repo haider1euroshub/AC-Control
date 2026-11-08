@@ -199,13 +199,23 @@ fun SetupScreen(
                             ) {
                                 FilterChip(
                                     selected = uiState.baselinePower == PowerState.ON,
-                                    onClick = { /* Could expose setter if needed */ },
+                                    onClick = { viewModel.onBaselinePowerSelected(PowerState.ON) },
                                     label = { Text("Power ON") }
                                 )
                                 FilterChip(
+                                    selected = uiState.baselinePower == PowerState.OFF,
+                                    onClick = { viewModel.onBaselinePowerSelected(PowerState.OFF) },
+                                    label = { Text("Power OFF") }
+                                )
+                                FilterChip(
                                     selected = uiState.baselineMode == AcMode.COOL,
-                                    onClick = { /* Could expose setter if needed */ },
+                                    onClick = { viewModel.onBaselineModeSelected(AcMode.COOL) },
                                     label = { Text("Cool Mode") }
+                                )
+                                FilterChip(
+                                    selected = uiState.baselineMode == AcMode.HEAT,
+                                    onClick = { viewModel.onBaselineModeSelected(AcMode.HEAT) },
+                                    label = { Text("Heat Mode") }
                                 )
                             }
                         }

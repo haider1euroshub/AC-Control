@@ -102,7 +102,17 @@ class DriverConnectionManager(
         outputStream = null
 
         _connectionStatus.value = ConnectionStatus.Disconnected
-        _state.value = _state.value.copy(isReachable = false)
+        // On explicit disconnect, mark all device-reported values as STALE.
+        _state.value = _state.value.let { s ->
+            s.copy(
+                isReachable = false,
+                power = s.power.staleIfConfirmed(),
+                mode = s.mode.staleIfConfirmed(),
+                targetTemperature = s.targetTemperature.staleIfConfirmed(),
+                swing = s.swing.staleIfConfirmed(),
+                indoorTemperature = s.indoorTemperature.staleIfConfirmed()
+            )
+        }
         diagnosticsSink.logEvent(tag, "Disconnected from socket")
     }
 
@@ -249,8 +259,31 @@ class DriverConnectionManager(
 
     private fun handlePeerClosed() {
         _connectionStatus.value = ConnectionStatus.Disconnected
-        _state.value = _state.value.copy(isReachable = false)
+        // Mark all DEVICE_REPORTED (CONFIRMED_BY_AC) values as STALE.
+        // STALE values are displayed (clearly) but are NOT a valid control basis.
+        _state.value = _state.value.let { s ->
+            s.copy(
+                isReachable = false,
+                power = s.power.staleIfConfirmed(),
+                mode = s.mode.staleIfConfirmed(),
+                targetTemperature = s.targetTemperature.staleIfConfirmed(),
+                swing = s.swing.staleIfConfirmed(),
+                indoorTemperature = s.indoorTemperature.staleIfConfirmed()
+            )
+        }
         scheduleReconnect()
+    }
+
+    /**
+     * Transitions CONFIRMED_BY_AC provenance to STALE on disconnect.
+     * Other provenances (OWNER_ASSERTED, OPTIMISTIC_AFTER_SEND, UNKNOWN) are preserved.
+     */
+    private fun <T> ValueWithProvenance<T>.staleIfConfirmed(): ValueWithProvenance<T> {
+        return if (provenance == StateProvenance.CONFIRMED_BY_AC && value != null) {
+            copy(provenance = StateProvenance.STALE)
+        } else {
+            this
+        }
     }
 
     private fun scheduleReconnect() {

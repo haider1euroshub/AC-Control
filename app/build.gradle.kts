@@ -28,12 +28,14 @@ android {
             isDebuggable = true
         }
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug") // Default debug signing for personal installable APK
+            // No signingConfig: produces an unsigned APK by default.
+            // The owner signs manually with their own keystore before distribution.
+            // NEVER use debug signingConfig for release.
         }
     }
 

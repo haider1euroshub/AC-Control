@@ -23,8 +23,10 @@ class AcController(
     private var inFlightSendJob: Job? = null
 
     fun onPowerClicked(currentState: AcState) {
-        // Toggle power if known, or default to ON if state is unknown
         val currentPower = currentState.power.value
+        // When power is unknown (provenance UNKNOWN or STALE without a known value), we cannot
+        // safely toggle. Default to OFF→ON transition (send ON) so we never accidentally turn off
+        // a running AC whose state we don't know. The UI should warn the user when state is unknown.
         val next = if (currentPower == PowerState.ON) PowerState.OFF else PowerState.ON
         coroutineScope.launch {
             repository.setPower(next)

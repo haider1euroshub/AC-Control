@@ -43,4 +43,12 @@ class HaiSmartDriverTest : DriverContractTest() {
         assertEquals(26.0, parsed.targetTemperature.value!!, 0.01)
         assertEquals(SwingPosition.OSCILLATE, parsed.swing.value!!.vertical)
     }
+
+    @Test
+    fun executeCommandWithoutKeyReturnsAuthOrKeyRejected() = kotlinx.coroutines.runBlocking {
+        val driver = HaiSmartDriver()
+        val result = driver.executeCommand(AcCommand.SetPower(PowerState.ON))
+        assertTrue(result is CommandResult.Failed)
+        assertEquals(AcError.AuthOrKeyRejected, (result as CommandResult.Failed).error)
+    }
 }
