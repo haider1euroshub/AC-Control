@@ -1,51 +1,53 @@
-# Room AC Controller
+# Room AC: local Wi-Fi control for air conditioners
 
-An Android application designed to control a Haier Smart Wi-Fi Air Conditioner over **local Wi-Fi only** without any cloud dependencies, external accounts, tracking, or subscription services.
+An Android app that finds air conditioners on the home Wi-Fi, pairs with them, and controls them
+**directly over the local network**. Everyday control needs no cloud connection. Built for simple,
+elderly-friendly use.
 
-> **IMPORTANT NOTICE REGARDING HARDWARE STATUS**:
-> This codebase has been thoroughly tested with unit and simulated tests, but **has NOT yet been tested on the physical Haier AC unit**.
-> Protocol drivers are based on reverse-engineered open-source documentation. Every control field in the app clearly displays its provenance (`Confirmed`, `Optimistic`, `Owner-Asserted`, or `Unknown`).
+> **Status (2026-11-13, version 2.3.0).** Zero manual technical setup: the app searches the Wi-Fi on
+> open, the user taps an AC, and the connection is set up automatically. Two integrations:
+>
+> - **Haier** (uSS): one-time in-app sign-in to the HaiSmart account (more accounts can be added); the
+>   app then keeps the sign-in alive and fetches and renews each AC's key by itself.
+>   Discovery, identity and handshake checked on a real AC
+>   (`HSU-20HFTEX/013WUSDC(OW)-T3`). **The account sign-in/key fetch has not yet been run against
+>   Haier's live service, and status/control are not yet verified on hardware.**
+> - **Gree** and Gree-module OEM units: fully automatic LAN pairing (no key, no account). Tested
+>   against a simulated module only. **Not yet tested on a real unit.**
+>
+> Midea, AUX, TCL, Dawlance, Daikin, Orient, PEL, Panasonic, LG, Samsung and Kenwood are on the
+> roadmap. See [docs/COMPATIBILITY_MATRIX.md](docs/COMPATIBILITY_MATRIX.md). No model is marked
+> "Verified" yet.
 
----
+## What it does
 
-## Supported Features (Strictly 4 Core Functions)
+| Step | How |
+|---|---|
+| **Discovery** | Each brand's own LAN search, run in parallel (Haier UDP 7083, Gree UDP 7000): broadcast plus a sweep of the phone's subnet. No IP address needed. One AC is listed once. |
+| **Identification** | Brand, model and name where the unit reports them; device ID (Wi-Fi MAC) as identity. Devices are found again after DHCP changes. |
+| **Authentication** | Gree: automatic LAN bind. Haier: one-time sign-in to the HaiSmart account, then each AC's key is fetched from the account automatically, matched by device ID and proven by a local read. Keys are stored encrypted and renewed automatically if the AC rejects them. |
+| **Local control** | Every command is **confirmed by reading the AC's status back**. Controls appear only when the unit reports them. |
 
-1. **Power Control**: Power ON / OFF with safety gate verification.
-2. **Mode Selection**: Switch between Cool and Heat mode (Heat mode is conservative and gated unless your unit's heating support is confirmed).
-3. **Temperature Control**: Increment/decrement target temperature with honest numeric display (`--` when unconfirmed).
-4. **Fan Swing Control**: Vertical oscillating swing control.
+## Project layout
 
----
-
-## Supporting Infrastructure
-
-- **Setup & Configuration**: Configure target AC IP, port, protocol driver, and optional local encryption key.
-- **Passive Connection Probe**: Test socket connectivity non-destructively without transmitting control commands.
-- **Owner-Asserted Baseline**: Safely bootstrap controls if the AC readback format is not yet verified on hardware.
-- **Diagnostics Log**: Real-time log viewer with strict redaction of encryption keys, passwords, and tokens.
-- **Hardware Keystore Security**: AES-GCM encrypted local storage without insecure fallbacks.
-
----
-
-## Architecture
-
-- **Pattern**: MVVM with Kotlin Coroutines and StateFlow.
-- **UI**: Jetpack Compose with Material 3.
-- **Multi-Module**:
-  - `:app`: Android presentation, storage, and diagnostics.
-  - `:core-domain`: Pure Kotlin business logic and provenance safety models.
-  - `:core-protocol`: Network connection manager, frame codecs, and driver contracts.
-  - `:driver-smartair2`: SmartAir2 driver implementation.
-  - `:driver-haismart`: HaiSmart AES-128 driver implementation.
-  - `:driver-hon`: Safe stub driver for unverified hOn protocols.
-
----
+| Module | Role |
+|---|---|
+| `core-domain` | Models: status, commands, capabilities, errors; **brand registry** (`AcBrands`); Haier model profiles |
+| `core-protocol` | **Adapter interface + registry**, multi-brand discovery manager, connection coordinator (states, single-session lock, polling, rediscovery, automatic provisioning, verification); `CloudAccountProvider` |
+| `driver-haismart` | Haier uSS adapter; `cloud/`: HaiSmart account sign-in and key retrieval |
+| `driver-gree` | Gree Wi-Fi adapter |
+| `app` | Android: Compose UI (remote, pairing, sign-in, devices, settings), Keystore-encrypted storage, network monitoring |
 
 ## Documentation
 
-- [Physical Hardware Bring-Up Guide](docs/HARDWARE_BRINGUP.md)
-- [Protocol Verification Status Matrix](docs/VERIFICATION_STATUS.md)
-- [Public Protocol Evidence Log](docs/PROTOCOL_EVIDENCE.md)
-- [Android Compatibility & Permissions](docs/ANDROID_COMPAT.md)
-- [Changelog](docs/CHANGELOG.md)
-
+- [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md): requirements baseline
+- [docs/PROGRESS.md](docs/PROGRESS.md): audit summary, phase plan, progress, known issues
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): layers, components, how to add a brand
+- [docs/COMPATIBILITY_MATRIX.md](docs/COMPATIBILITY_MATRIX.md): model-level records and brand roadmap
+- [docs/RESEARCH_FINDINGS.md](docs/RESEARCH_FINDINGS.md): review of the feasibility study, per-brand leads and conflicts
+- [docs/DISCOVERY_AND_AUTH.md](docs/DISCOVERY_AND_AUTH.md): discovery, authentication, provisioning
+- [docs/PROTOCOL.md](docs/PROTOCOL.md) (Haier) and [docs/PROTOCOL_GREE.md](docs/PROTOCOL_GREE.md)
+- [docs/SECURITY.md](docs/SECURITY.md): security implementation notes
+- [docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md), [docs/BUILD_AND_INSTALL.md](docs/BUILD_AND_INSTALL.md)
+- [docs/TEST_REPORT.md](docs/TEST_REPORT.md), [docs/AUDIT.md](docs/AUDIT.md)
+- [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)

@@ -3,12 +3,11 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":core-domain"))
-    implementation(project(":core-protocol"))
+    api(project(":core-protocol"))
+    // JSON tree API only, for the HaiSmart account service (sign-in, device list, key gateway).
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
 
-    testImplementation(project(":core-protocol"))
-    testImplementation(testFixtures(project(":core-protocol")))
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
 }

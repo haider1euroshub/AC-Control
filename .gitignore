@@ -7,3 +7,12 @@ local.properties
 .env
 
 .tools/
+keystore.properties
+release/*.apk
+
+# Never commit app packages, logs or raw captures (2026-11-23)
+*.xapk
+*.apk
+*.log
+evidence/**/*.pcap
+tools/haier-capture/output/

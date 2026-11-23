@@ -17,8 +17,10 @@ rootProject.name = "RoomAcController"
 
 include(":core-domain")
 include(":core-protocol")
+include(":core-netscan")
+include(":core-devicecontrol")
 include(":driver-haismart")
-include(":driver-smartair2")
-include(":driver-hon")
+include(":driver-gree")
+include(":driver-midea")
 include(":app")
 

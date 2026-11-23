@@ -38,6 +38,15 @@ class DiagnosticsLoggerTest {
     }
 
     @Test
+    fun accountTokensInJsonAreRedacted() {
+        DiagnosticsLogger.d("TestTag", "{\"refreshToken\":\"rt-AbC.123\",\"accessToken\":\"at-XyZ.789\",\"sesame\":\"c2VzYW1l\"}")
+        val exported = DiagnosticsLogger.getExportableLogText()
+        assertFalse(exported.contains("rt-AbC.123"))
+        assertFalse(exported.contains("at-XyZ.789"))
+        assertFalse(exported.contains("c2VzYW1l"))
+    }
+
+    @Test
     fun ringBufferRetainsMaximumEntries() {
         DiagnosticsLogger.clear()
         repeat(210) { i ->

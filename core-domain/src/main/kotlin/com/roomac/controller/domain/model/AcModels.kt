@@ -1,196 +1,302 @@
 package com.roomac.controller.domain.model
 
-enum class PowerState {
-    OFF,
-    ON
-}
-
-enum class AcMode {
-    COOL,
-    HEAT,
-    OTHER // e.g. dry, fan, auto set by remote; app does not switch TO this, but accurately reports it
-}
-
-enum class SwingPosition {
-    OFF,
-    OSCILLATE,
-    POSITION_1,
-    POSITION_2,
-    POSITION_3,
-    POSITION_4,
-    POSITION_5
-}
-
-data class SwingState(
-    val vertical: SwingPosition = SwingPosition.OFF,
-    val horizontal: SwingPosition = SwingPosition.OFF
-)
-
 /**
- * Provenance tracking for every state value to prevent fabricating unconfirmed hardware defaults.
+ * Operating modes. [stdCode] is the Haier STD operation-mode code (0 auto, 1 cool, 2 dry, 4 heat,
+ * 6 fan only); other protocol adapters keep their own wire mapping and use only the enum.
  */
-enum class StateProvenance {
-    CONFIRMED_BY_AC,        // Verified directly from a valid parsed status packet from the AC
-    OPTIMISTIC_AFTER_SEND,  // In-flight command transmitted over network; awaiting confirmation
-    OWNER_ASSERTED,         // Explicitly entered by the owner in Setup (Bring-up mode)
-    UNKNOWN                 // No confirmed or asserted value exists
-}
-
-data class ValueWithProvenance<T>(
-    val value: T?,
-    val provenance: StateProvenance = StateProvenance.UNKNOWN
-) {
-    val isKnown: Boolean get() = value != null && provenance != StateProvenance.UNKNOWN
+enum class AcMode(val stdCode: Int, val label: String) {
+    AUTO(0, "Auto"),
+    COOL(1, "Cool"),
+    DRY(2, "Dry"),
+    HEAT(4, "Heat"),
+    FAN(6, "Fan");
 
     companion object {
-        fun <T> unknown(): ValueWithProvenance<T> = ValueWithProvenance(null, StateProvenance.UNKNOWN)
-        fun <T> confirmed(value: T): ValueWithProvenance<T> = ValueWithProvenance(value, StateProvenance.CONFIRMED_BY_AC)
-        fun <T> optimistic(value: T): ValueWithProvenance<T> = ValueWithProvenance(value, StateProvenance.OPTIMISTIC_AFTER_SEND)
-        fun <T> ownerAsserted(value: T): ValueWithProvenance<T> = ValueWithProvenance(value, StateProvenance.OWNER_ASSERTED)
+        fun fromStdCode(code: Int): AcMode? = entries.firstOrNull { it.stdCode == code }
     }
 }
 
-data class AcState(
-    val power: ValueWithProvenance<PowerState> = ValueWithProvenance.unknown(),
-    val mode: ValueWithProvenance<AcMode> = ValueWithProvenance.unknown(),
-    val targetTemperature: ValueWithProvenance<Double> = ValueWithProvenance.unknown(),
-    val swing: ValueWithProvenance<SwingState> = ValueWithProvenance.unknown(),
-    val indoorTemperature: ValueWithProvenance<Double> = ValueWithProvenance.unknown(),
-    val isReachable: Boolean = false,
-    val lastUpdatedEpochMs: Long = 0L
-) {
+/** Fan speeds. [stdCode] is the Haier STD code (1 high, 2 medium, 3 low, 5 auto); other adapters map their own. */
+enum class FanSpeed(val stdCode: Int, val label: String) {
+    AUTO(5, "Auto"),
+    LOW(3, "Low"),
+    MEDIUM(2, "Medium"),
+    HIGH(1, "High");
+
+    companion object {
+        fun fromStdCode(code: Int): FanSpeed? = entries.firstOrNull { it.stdCode == code }
+    }
+}
+
+/** ECO / power-limit level. Higher levels cap compressor current harder. */
+enum class EcoLevel(val wireValue: Int, val label: String) {
+    OFF(0, "Off"),
+    LEVEL_1(5, "L1"),
+    LEVEL_2(6, "L2"),
+    LEVEL_3(7, "L3");
+
+    companion object {
+        fun fromWire(value: Int): EcoLevel? = entries.firstOrNull { it.wireValue == value }
+    }
+}
+
+/** On/off functions carried as single flags in the appliance's control block. */
+enum class AcFeature(val label: String) {
+    TURBO("Turbo"),
+    QUIET("Quiet"),
+    SLEEP("Sleep"),
+    HEALTH("Health"),
+    DISPLAY("Display light"),
+    ENERGY_SAVING("Energy saving")
+}
+
+/**
+ * A full status snapshot decoded from one report the appliance sent. Every field here is what the AC
+ * itself reported; nothing is filled in from what the user last tapped. A `null` means the report did
+ * not carry that reading (e.g. a sensor the unit does not have).
+ */
+data class AcStatus(
+    val power: Boolean,
+    val mode: AcMode?,
+    val rawModeCode: Int,
+    val targetTemperatureC: Double,
+    val fanSpeed: FanSpeed?,
+    val rawFanCode: Int,
+    val verticalSwing: Boolean,
+    val horizontalSwing: Boolean?,
+    val indoorTemperatureC: Double?,
+    val outdoorTemperatureC: Double?,
+    val features: Map<AcFeature, Boolean>,
+    val ecoLevel: EcoLevel?,
+    val selfCleaning: Boolean?,
+    val heatCapable: Boolean?,
+    val errorCode: Int?,
+    /** True when the report layout is fully recognised and its control block may seed a write. */
+    val writable: Boolean,
+    /** Report length in bytes, kept for diagnostics and layout identification. */
+    val reportLength: Int,
+    val receivedAtEpochMs: Long,
     /**
-     * Checks if all fields required to safely assemble a full control frame are known.
-     * Prevents overriding real AC power with fabricated OFF or defaults.
+     * Names of the properties the unit returned, for protocols that report named properties (e.g.
+     * Gree). Used to offer only controls the unit actually has. Empty for fixed-layout protocols.
      */
-    val isFullyKnownForControl: Boolean
-        get() = power.isKnown && mode.isKnown && targetTemperature.isKnown && swing.isKnown
-}
-
-enum class TemperatureUnit {
-    CELSIUS,
-    FAHRENHEIT
-}
-
-enum class CapabilitySource {
-    REPORTED_BY_AC,
-    DOCUMENTED_BY_DRIVER,
-    ENTERED_BY_OWNER,
-    ASSUMED_DEFAULT
-}
-
-data class AcCapabilities(
-    val supportsHeating: Boolean = false,
-    val minTemperature: Double = 16.0,
-    val maxTemperature: Double = 30.0,
-    val temperatureStep: Double = 1.0,
-    val temperatureUnit: TemperatureUnit = TemperatureUnit.CELSIUS,
-    val supportedVerticalSwings: Set<SwingPosition> = setOf(SwingPosition.OFF, SwingPosition.OSCILLATE),
-    val supportedHorizontalSwings: Set<SwingPosition> = setOf(SwingPosition.OFF),
-    val source: CapabilitySource = CapabilitySource.ASSUMED_DEFAULT,
-    val areCapabilitiesKnown: Boolean = false
+    val reportedProperties: Set<String> = emptySet()
 )
 
 /**
- * Baseline state asserted by the owner in Setup (Bring-up mode) to safely bootstrap control
- * before readback packet parsing is proven on physical hardware.
+ * What the app is allowed to offer for a device. Built from the appliance's own report plus its
+ * model profile, never from assumptions: a control is listed only when both agree it exists.
  */
-data class OwnerAssertedBaseline(
-    val power: PowerState = PowerState.ON,
-    val mode: AcMode = AcMode.COOL,
-    val targetTemperature: Double = 24.0,
-    val verticalSwing: SwingPosition = SwingPosition.OSCILLATE,
-    val horizontalSwing: SwingPosition = SwingPosition.OFF,
-    val isEnabled: Boolean = false
+data class AcCapabilities(
+    val modes: List<AcMode>,
+    val fanSpeeds: List<FanSpeed>,
+    val minTemperatureC: Double,
+    val maxTemperatureC: Double,
+    val temperatureStepC: Double,
+    val verticalSwing: Boolean,
+    val horizontalSwing: Boolean,
+    val features: Set<AcFeature>,
+    val ecoLevels: List<EcoLevel>,
+    val selfClean: Boolean,
+    val writable: Boolean,
+    /** False where the unit is known to drop Auto fan while in Fan mode (confirmed for Haier classic). */
+    val autoFanInFanMode: Boolean = true
 )
 
+/** A single user-requested change. */
 sealed class AcCommand {
-    data class SetPower(val power: PowerState) : AcCommand()
+    data class SetPower(val on: Boolean) : AcCommand()
     data class SetMode(val mode: AcMode) : AcCommand()
-    data class SetTargetTemperature(val target: Double) : AcCommand()
-    data class SetVerticalSwing(val position: SwingPosition) : AcCommand()
-    data class SetHorizontalSwing(val position: SwingPosition) : AcCommand()
-    object RefreshState : AcCommand()
+    data class SetTargetTemperature(val celsius: Double) : AcCommand()
+    data class SetFanSpeed(val speed: FanSpeed) : AcCommand()
+    data class SetVerticalSwing(val on: Boolean) : AcCommand()
+    data class SetHorizontalSwing(val on: Boolean) : AcCommand()
+    data class SetFeature(val feature: AcFeature, val on: Boolean) : AcCommand()
+    data class SetEcoLevel(val level: EcoLevel) : AcCommand()
+    object StartSelfClean : AcCommand()
+
+    val description: String
+        get() = when (this) {
+            is SetPower -> if (on) "Power on" else "Power off"
+            is SetMode -> "Mode ${mode.label}"
+            is SetTargetTemperature -> "Set ${formatTemp(celsius)}"
+            is SetFanSpeed -> "Fan ${speed.label}"
+            is SetVerticalSwing -> "Up/down swing ${if (on) "on" else "off"}"
+            is SetHorizontalSwing -> "Left/right swing ${if (on) "on" else "off"}"
+            is SetFeature -> "${feature.label} ${if (on) "on" else "off"}"
+            is SetEcoLevel -> "ECO ${level.label}"
+            StartSelfClean -> "Start self-clean"
+        }
+
+    /** Whether [status] shows this command took effect. Used to verify every command by read-back. */
+    fun isReflectedIn(status: AcStatus): Boolean = when (this) {
+        is SetPower -> status.power == on
+        is SetMode -> status.mode == mode
+        is SetTargetTemperature -> status.targetTemperatureC == celsius
+        is SetFanSpeed -> status.fanSpeed == speed
+        is SetVerticalSwing -> status.verticalSwing == on
+        is SetHorizontalSwing -> status.horizontalSwing == on
+        is SetFeature -> status.features[feature] == on
+        is SetEcoLevel -> status.ecoLevel == level
+        StartSelfClean -> status.selfCleaning == true
+    }
 }
 
-sealed class CommandResult {
-    data class Confirmed(val newState: AcState) : CommandResult()
-    data class SentUnconfirmed(val pendingState: AcState) : CommandResult()
-    data class Failed(val error: AcError) : CommandResult()
+fun formatTemp(celsius: Double): String =
+    if (celsius % 1.0 == 0.0) "${celsius.toInt()}°C" else "${"%.1f".format(celsius)}°C"
+
+/** Outcome of a command, always based on what the appliance reported back. */
+sealed class CommandOutcome {
+    /** The AC accepted the change and a status report read back afterwards shows it applied. */
+    data class Confirmed(val status: AcStatus) : CommandOutcome()
+
+    /** The AC explicitly refused the command (EPP refusal frame) or reported a state without it. */
+    data class Rejected(val reason: String, val status: AcStatus?) : CommandOutcome()
+
+    /** The command could not be delivered or verified. */
+    data class Failed(val error: AcError) : CommandOutcome()
 }
 
-sealed class CommandLifecycle {
-    object Idle : CommandLifecycle()
-    data class Pending(val command: AcCommand) : CommandLifecycle()
-    data class Confirmed(val command: AcCommand) : CommandLifecycle()
-    data class SentUnconfirmed(val command: AcCommand) : CommandLifecycle()
-    data class Failed(val command: AcCommand, val error: AcError) : CommandLifecycle()
-    data class TimedOut(val command: AcCommand) : CommandLifecycle()
+/**
+ * " (Step: sign-in · code 30032)" for account errors, so the user and diagnostics see which step of
+ * sign-in → device list → key fetch → local handshake failed and the service's own reason code.
+ */
+private fun failedAt(step: String?, code: String?): String {
+    val parts = listOfNotNull(step?.let { "Step: $it" }, code?.takeIf { it.isNotEmpty() }?.let { "code $it" })
+    return if (parts.isEmpty()) "" else " (${parts.joinToString(" · ")})"
 }
 
-sealed class AcError(val userMessage: String, val technicalDetail: String = "") {
-    object NoAcConfigured : AcError(
-        "No Air Conditioner configured. Please visit Setup to connect your AC.",
-        "Configuration missing"
+/**
+ * Errors the user can see. Every message names a practical next step and never includes key
+ * material or raw payloads.
+ */
+sealed class AcError(val userMessage: String, val nextStep: String) {
+    object WifiOff : AcError(
+        "Wi-Fi is turned off.",
+        "Turn on Wi-Fi and join the same network as the air conditioner."
     )
-
-    data class CommandBlocked(val reason: String) : AcError(
-        "Command blocked by safety gate: $reason",
-        "CommandBlocked: $reason"
+    object NotOnWifi : AcError(
+        "The phone is not connected to a Wi-Fi network.",
+        "Join the home Wi-Fi network the air conditioner uses. Mobile data cannot reach the AC."
     )
-
-    object NoWifi : AcError(
-        "Wi-Fi is disconnected. Please connect your phone to the same Wi-Fi network as the AC.",
-        "No active Wi-Fi interface"
+    object AcNotFound : AcError(
+        "No supported air conditioner answered on this network.",
+        "Check the AC is powered at the wall and its Wi-Fi light is on. Guest Wi-Fi, client isolation, VLANs and VPNs block local discovery."
     )
-
-    object DifferentNetwork : AcError(
-        "Phone appears to be on a different network subnet than the AC.",
-        "Subnet mismatch"
+    data class Unreachable(val host: String) : AcError(
+        "The air conditioner is not answering.",
+        "Check the AC has power and is on Wi-Fi. The app will search the network again."
     )
-
-    object PermissionMissing : AcError(
-        "Local network access permission is required to communicate with the AC.",
-        "Missing NEARBY_WIFI_DEVICES or local network permission"
+    object ServiceUnavailable : AcError(
+        "The AC refused the local control connection.",
+        "Power-cycle the AC at the breaker, wait one minute and try again."
     )
-
-    data class AcUnreachable(val host: String) : AcError(
-        "Cannot reach AC at $host. Verify the AC is powered on at the wall breaker.",
-        "TCP connection refused or unreachable host"
+    object SessionBusy : AcError(
+        "The AC closed the connection. Another app or hub may be connected to it locally.",
+        "Close other apps or hubs controlling this AC (Home Assistant, the manufacturer's app on the same Wi-Fi), then retry."
     )
-
+    object HandshakeRefused : AcError(
+        "The AC refused the connection.",
+        "Remove this AC in the app and add it again."
+    )
+    object KeyMissing : AcError(
+        "This AC has not been connected yet.",
+        "Tap \"Reconnect\" and the app will set it up automatically."
+    )
+    object KeyInvalid : AcError(
+        "The AC did not accept the saved connection key.",
+        "Tap \"Reconnect\": the app fetches a fresh key by itself."
+    )
+    /** The AC needs a one-time sign-in to the manufacturer's account before its key can be fetched. */
+    data class AccountRequired(val brand: String, val service: String) : AcError(
+        "Sign in to your $brand account once so the app can connect to this AC.",
+        "Tap \"Sign in\" and use the same email or phone number and password as in the $service app."
+    )
+    /** The manufacturer refused the sign-in (wrong password, unknown account) or no longer accepts the saved one. */
+    data class AccountRejected(val service: String, val step: String? = null, val code: String? = null) : AcError(
+        "The $service account did not accept the sign-in." + failedAt(step, code),
+        "Check the email or phone number and password are the ones you use in the $service app, then try again."
+    )
+    /**
+     * The service found no account with this email or phone number in the chosen country. Haier gives
+     * the same answer for an account that exists but was registered under another country.
+     */
+    data class AccountNotInRegion(val service: String, val step: String? = null, val code: String? = null) : AcError(
+        "No $service account with this email or phone number was found in the selected country." + failedAt(step, code),
+        "Choose the country that was selected when the $service account was created (it can differ from where you live), and check the email or phone number."
+    )
+    /**
+     * The manufacturer's service refused this app itself, not the account: the account and any saved
+     * sign-in are untouched. Seen when the app identity is wrong; also the symptom of the service
+     * blocking the app.
+     */
+    data class ServiceRefusedApp(val brand: String, val step: String? = null, val code: String? = null) : AcError(
+        "$brand's online service is not accepting requests from this version of RoomAC. Your account is not the problem." + failedAt(step, code),
+        "ACs already connected keep working on your Wi-Fi. Install the latest version of RoomAC."
+    )
+    /** The manufacturer's online service could not be reached. Says nothing about the account. */
+    data class CloudUnavailable(val service: String, val step: String? = null, val code: String? = null) : AcError(
+        "Could not reach the $service online service." + failedAt(step, code),
+        "Check the phone has internet access, then try again. This is needed only when an AC is first connected."
+    )
+    /** Signed in, but the selected AC is not one of the account's devices. */
+    data class DeviceNotInAccount(val service: String, val step: String? = null, val code: String? = null) : AcError(
+        "This AC is not in the signed-in $service account." + failedAt(step, code),
+        "This is an account binding issue, not an app fault. Add the AC in the $service app with this account, or sign in here with the account that set it up."
+    )
+    /** The account is signed in and lists the AC, but the key service would not issue its key. */
+    data class KeyNotIssued(val service: String, val code: String? = null) : AcError(
+        "The $service service did not issue a key for this AC." + failedAt("key fetch", code),
+        "Try again later. If it keeps failing, open the AC once in the $service app, then tap \"Try again\"."
+    )
+    /** This build of the app cannot sign in to the brand's service (its app identity was left out of the build). */
+    data class AccountUnavailable(val brand: String) : AcError(
+        "$brand sign-in is not configured in this build of RoomAC.",
+        "This build was made without the $brand sign-in settings. Install a build that includes them (see BUILD_AND_INSTALL.md). ACs already connected keep working."
+    )
+    data class ProvisioningFailed(val detail: String) : AcError(
+        "The AC did not accept automatic pairing. $detail",
+        "Check the AC is switched on at the wall and on the same Wi-Fi, then tap \"Scan again\"."
+    )
+    data class KeyRotated(val deviceVersion: Int, val heldVersion: Int) : AcError(
+        "The AC has changed its local key (now version $deviceVersion, saved key is version $heldVersion).",
+        "Tap \"Reconnect\": the app fetches the new key by itself."
+    )
+    data class UnsupportedLayout(val reportLength: Int) : AcError(
+        "This AC sends a $reportLength-byte status layout that the app cannot control safely yet.",
+        "Status is read-only for this model. Share a diagnostics export so the layout can be added."
+    )
+    object ProtocolMismatch : AcError(
+        "The device answered, but not with the expected local protocol.",
+        "Remove this AC in the app and add it again."
+    )
     object Timeout : AcError(
-        "The AC did not respond within the expected time limit.",
-        "Socket read timeout"
+        "The AC did not answer in time.",
+        "Move closer to the router or retry. If it keeps happening, power-cycle the AC."
     )
-
-    object AuthOrKeyRejected : AcError(
-        "Authentication or local encryption key was rejected by the AC.",
-        "AES decryption or key handshake error"
+    object DisconnectedDuringCommand : AcError(
+        "The connection dropped while the command was being sent.",
+        "Check the current state on the dashboard before retrying, because the change may or may not have applied."
     )
-
-    data class DecryptFailed(val detail: String) : AcError(
-        "Decryption failed: $detail. Verify the 16-byte key.",
-        detail
+    data class CommandRefused(val code: Int?) : AcError(
+        "The AC refused this command" + (code?.let { " (reason code $it)" } ?: "") + ".",
+        "The setting may not be allowed in the current mode. Change mode or power and try again."
     )
-
-    data class ProtocolNotVerified(val protocolName: String) : AcError(
-        "Protocol '$protocolName' is unverified on hardware or not implemented for local LAN control.",
-        "Unverified driver"
+    data class NotSupported(val what: String) : AcError(
+        "$what is not supported by this air conditioner.",
+        "This control is not available for this model."
     )
-
-    data class CapabilityUnsupported(val feature: String) : AcError(
-        "The AC does not support $feature according to its capabilities.",
-        "Feature unsupported by physical hardware"
+    data class InvalidValue(val detail: String) : AcError(
+        "Invalid value: $detail.",
+        "Choose a value within the range shown."
     )
-
-    data class UnexpectedResponse(val detail: String) : AcError(
-        "Received unexpected response from AC: $detail",
-        detail
+    /** Sign-up: the service refuses more verification codes for this address for now. Retrying makes it worse. */
+    data class TooManyCodes(val service: String) : AcError(
+        "$service has sent too many verification codes to this email recently.",
+        "Don't request another code. Use the newest code already in your inbox, or wait a while (it can take up to a day) before asking again."
     )
-
-    data class GeneralError(val message: String) : AcError(
-        message,
-        message
+    data class General(val detail: String) : AcError(
+        detail,
+        "Retry. If it keeps failing, open Diagnostics and export the log."
     )
 }

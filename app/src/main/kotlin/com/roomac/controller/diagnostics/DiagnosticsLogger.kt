@@ -1,7 +1,6 @@
 package com.roomac.controller.diagnostics
 
 import android.util.Log
-import com.roomac.controller.protocol.DiagnosticsSink
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,7 +29,7 @@ data class LogEntry(
     }
 }
 
-object DiagnosticsLogger : DiagnosticsSink {
+object DiagnosticsLogger {
 
     private const val MAX_LOG_ENTRIES = 200
 
@@ -38,7 +37,7 @@ object DiagnosticsLogger : DiagnosticsSink {
     val logs: StateFlow<List<LogEntry>> = _logs.asStateFlow()
 
     // Thorough regex patterns for secrets redaction (keys, passwords, tokens, in assignment or JSON forms)
-    private val passwordPattern = Regex("(?i)\\b(password|token|key|secret|localKeyHex|pskHex)\\s*[:=]\\s*([\"']?[^\\s,\"'}]+[\"']?)")
+    private val passwordPattern = Regex("(?i)\\b(password|token|key|secret|localKeyHex|pskHex|refreshToken|accessToken|accountToken|uhomeAccessToken|sesame|localKey)[\"']?\\s*[:=]\\s*([\"']?[^\\s,\"'}]+[\"']?)")
     private val hexKeyPattern = Regex("(?i)\\b([0-9a-f]{32}|[0-9a-f]{64})\\b")
 
     fun log(level: LogLevel, tag: String, message: String) {
@@ -71,10 +70,6 @@ object DiagnosticsLogger : DiagnosticsSink {
     fun w(tag: String, message: String) = log(LogLevel.WARN, tag, message)
     fun e(tag: String, message: String) = log(LogLevel.ERROR, tag, message)
 
-    override fun logEvent(tag: String, message: String) = i(tag, message)
-    override fun logRawTx(tag: String, packetHex: String) = d(tag, "TX: $packetHex")
-    override fun logRawRx(tag: String, packetHex: String) = d(tag, "RX: $packetHex")
-    override fun logError(tag: String, message: String, throwable: Throwable?) = e(tag, "$message ${throwable?.message ?: ""}")
 
     fun redactSecrets(input: String): String {
         var result = input
